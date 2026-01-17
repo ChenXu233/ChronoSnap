@@ -6,30 +6,58 @@ import '../../core/model/project.dart';
 import 'project_notifier.dart';
 import 'project_settings_screen.dart';
 
+final projectSearchProvider = StateProvider<String>((ref) => '');
+
 class ProjectListScreen extends ConsumerWidget {
   const ProjectListScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final projects = ref.watch(projectListProvider);
+    final projectsAsync = ref.watch(projectListProvider);
+    final searchQuery = ref.watch(projectSearchProvider);
     final l10n = AppLocalizations.of(context);
+    final isWideScreen = MediaQuery.of(context).size.width > 600;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.projectList),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Color(0xFF64748B)),
-            onPressed: () {},
-          ),
+          _SearchField(isWide: isWideScreen),
+          const SizedBox(width: 16),
         ],
       ),
-      body: projects.when(
+      body: projectsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, stack) => Center(child: Text('Error: $e')),
-        data: (projectList) {
+        data: (originalList) {
+          final projectList = originalList.where((p) {
+            return p.name.toLowerCase().contains(searchQuery.toLowerCase());
+          }).toList();
+
           if (projectList.isEmpty) {
+            if (searchQuery.isNotEmpty) {
+              return Center(
+                child: Text('No projects found matching "$searchQuery"'),
+              );
+            }
             return _EmptyState(l10n: l10n);
+          }
+
+          if (isWideScreen) {
+            return GridView.builder(
+              padding: const EdgeInsets.all(24),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 400,
+                childAspectRatio: 1.5,
+                crossAxisSpacing: 24,
+                mainAxisSpacing: 24,
+              ),
+              itemCount: projectList.length,
+              itemBuilder: (context, index) {
+                final project = projectList[index];
+                return _ProjectCard(project: project);
+              },
+            );
           }
 
           return ListView.separated(
@@ -102,6 +130,84 @@ class _EmptyState extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SearchField extends ConsumerStatefulWidget {
+  final bool isWide;
+  const _SearchField({required this.isWide});
+
+  @override
+  ConsumerState<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends ConsumerState<_SearchField> {
+  late TextEditingController _controller;
+  bool _isExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isWide && !_isExpanded) {
+      return IconButton(
+        icon: const Icon(Icons.search, color: Color(0xFF64748B)),
+        onPressed: () {
+          setState(() {
+            _isExpanded = true;
+          });
+        },
+      );
+    }
+
+    return Container(
+      width: widget.isWide ? 300 : 200,
+      height: 40,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: TextField(
+        controller: _controller,
+        autofocus: !widget.isWide,
+        onChanged: (value) =>
+            ref.read(projectSearchProvider.notifier).state = value,
+        decoration: InputDecoration(
+          hintText: 'Search...',
+          prefixIcon: const Icon(
+            Icons.search,
+            size: 20,
+            color: Color(0xFF64748B),
+          ),
+          suffixIcon: widget.isWide
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () {
+                    setState(() {
+                      _isExpanded = false;
+                      _controller.clear();
+                      ref.read(projectSearchProvider.notifier).state = '';
+                    });
+                  },
+                ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF94A3B8)),
+        ),
+        style: const TextStyle(fontSize: 14),
       ),
     );
   }

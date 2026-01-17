@@ -13,8 +13,12 @@ void main() async {
   await Hive.initFlutter();
 
   // Register Hive adapters
-  Hive.registerAdapter(ProjectAdapter());
-  Hive.registerAdapter(ProjectStatusAdapter());
+  if (!Hive.isAdapterRegistered(0)) {
+    Hive.registerAdapter(ProjectStatusAdapter());
+  }
+  if (!Hive.isAdapterRegistered(1)) {
+    Hive.registerAdapter(ProjectAdapter());
+  }
 
   runApp(const ProviderScope(child: MyApp()));
 }

@@ -23,6 +23,11 @@ class CameraService {
     _isInitialized = true;
   }
 
+  /// Windows 平台的模拟相机初始化
+  Future<void> initializeMockCamera() async {
+    _isInitialized = true;
+  }
+
   void applyCameraConfig(CameraConfig config) async {
     if (!_isInitialized || _controller == null) return;
 
