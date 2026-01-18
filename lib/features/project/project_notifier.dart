@@ -5,6 +5,7 @@ import '../../core/repository/project_repository.dart';
 import '../../core/service/camera_service.dart';
 import '../../core/service/scheduling_service.dart';
 import '../../core/service/foreground_service.dart';
+import '../../core/service/export_service.dart';
 import 'package:uuid/uuid.dart';
 
 final _uuid = Uuid();
@@ -27,6 +28,11 @@ final schedulingServiceProvider = Provider<SchedulingService>((ref) {
 // Foreground service provider
 final foregroundServiceProvider = Provider<ForegroundService>((ref) {
   return ForegroundService();
+});
+
+// Export service provider
+final exportServiceProvider = Provider<ExportService>((ref) {
+  return ExportService();
 });
 
 // Project list provider
@@ -60,6 +66,10 @@ class ProjectListNotifier extends StateNotifier<AsyncValue<List<Project>>> {
     int? durationMinutes,
     required CameraConfig cameraConfig,
     required String storagePath,
+    bool enableSchedule = false,
+    int? startHour,
+    int? endHour,
+    List<int>? selectedDays,
   }) async {
     try {
       final repository = _ref.read(projectRepositoryProvider);
@@ -75,6 +85,10 @@ class ProjectListNotifier extends StateNotifier<AsyncValue<List<Project>>> {
         storagePath: storagePath,
         createdTime: DateTime.now(),
         status: ProjectStatus.idle,
+        enableSchedule: enableSchedule,
+        startHour: enableSchedule ? startHour : null,
+        endHour: enableSchedule ? endHour : null,
+        selectedDays: enableSchedule ? selectedDays : null,
       );
 
       await repository.saveProject(project);

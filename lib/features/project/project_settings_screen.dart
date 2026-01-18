@@ -4,11 +4,23 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/i18n/app_localizations.dart';
 import '../../core/model/camera_config.dart';
 import '../../core/model/project.dart';
+import '../../core/service/export_service.dart';
 import 'project_notifier.dart';
 import '../camera/camera_preview_screen.dart';
 import 'package:uuid/uuid.dart';
 
 final _uuid = Uuid();
+
+// Weekday constants
+const _kWeekdays = [
+  {'id': 1, 'label': 'Mon', 'full': 'Monday'},
+  {'id': 2, 'label': 'Tue', 'full': 'Tuesday'},
+  {'id': 3, 'label': 'Wed', 'full': 'Wednesday'},
+  {'id': 4, 'label': 'Thu', 'full': 'Thursday'},
+  {'id': 5, 'label': 'Fri', 'full': 'Friday'},
+  {'id': 6, 'label': 'Sat', 'full': 'Saturday'},
+  {'id': 7, 'label': 'Sun', 'full': 'Sunday'},
+];
 
 class ProjectSettingsScreen extends ConsumerStatefulWidget {
   final Project? project;
@@ -27,6 +39,12 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
   late TextEditingController _totalShotsController;
   late CameraConfig _cameraConfig;
 
+  // Schedule settings
+  bool _enableSchedule = false;
+  int _startHour = 8;
+  int _endHour = 18;
+  List<int> _selectedDays = [1, 2, 3, 4, 5, 6, 7]; // 默认全选
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +58,14 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
     _cameraConfig = widget.project != null
         ? CameraConfig.fromJsonString(widget.project!.cameraConfigJson)
         : const CameraConfig();
+
+    // Load schedule settings from project
+    if (widget.project != null) {
+      _enableSchedule = widget.project!.enableSchedule;
+      _startHour = widget.project!.startHour ?? 8;
+      _endHour = widget.project!.endHour ?? 18;
+      _selectedDays = widget.project!.selectedDays ?? [1, 2, 3, 4, 5, 6, 7];
+    }
   }
 
   @override
@@ -48,6 +74,61 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
     _intervalController.dispose();
     _totalShotsController.dispose();
     super.dispose();
+  }
+
+  /// 导出项目照片
+  Future<void> _exportProject() async {
+    if (widget.project == null) return;
+
+    final l10n = AppLocalizations.of(context);
+    final exportService = ref.read(exportServiceProvider);
+    final project = widget.project!;
+
+    // 显示加载进度
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const _ExportProgressDialog(),
+    );
+
+    try {
+      // 检查是否有照片
+      final hasPhotos = await exportService.hasPhotos(project.storagePath);
+      if (!hasPhotos) {
+        if (mounted) {
+          Navigator.pop(context); // 关闭进度对话框
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('没有照片可导出')),
+          );
+        }
+        return;
+      }
+
+      // 生成 ZIP
+      final zipPath = await exportService.exportProjectToZip(
+        projectName: project.name,
+        storagePath: project.storagePath,
+        onProgress: (current, total) {
+          // 可以更新进度
+        },
+      );
+
+      // 关闭进度对话框
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // 分享 ZIP
+      await exportService.shareZip(zipPath);
+
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出失败: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _requestPermissions() async {
@@ -77,6 +158,7 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
 
   Future<void> _saveAndContinue() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_enableSchedule && !_isScheduleValid) return;
 
     final l10n = AppLocalizations.of(context);
     final name = _nameController.text.trim();
@@ -87,21 +169,14 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
     final cameraStatus = await Permission.camera.status;
     if (!cameraStatus.isGranted) {
       await _requestPermissions();
-      return; // Return and ask user to try again after permission
+      return;
     }
 
     try {
       Project savedProject;
 
       if (widget.project != null) {
-        // We are strictly updating? The logic below was recreating/updating depending on context.
-        // Assuming update here for simplicty, but wait... the original code logic was mixing "isEditing" with logic.
-        // Let's stick to the original logic: if passed, it's edit, else create.
-        // BUT, original logic for "isEditing" just assigned project to savedProject without saving changes to DB?
-        // Ah, `ProjectSettingsScreen` serves both "Edit Settings" and "Create New".
-        // If it's existing, we might update it.
-
-        // Let's update the existing project object
+        // 更新现有项目
         final updatedProject = Project(
           id: widget.project!.id,
           name: name,
@@ -114,29 +189,16 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
           status: widget.project!.status,
           completedShots: widget.project!.completedShots,
           lastShotTime: widget.project!.lastShotTime,
+          enableSchedule: _enableSchedule,
+          startHour: _enableSchedule ? _startHour : null,
+          endHour: _enableSchedule ? _endHour : null,
+          selectedDays: _enableSchedule ? List<int>.from(_selectedDays) : null,
         );
 
-        // DB update would be needed here (Refactoring original logic)
-        // Since original code had empty try block for edit, I'll add the update call.
-        // Wait, original code for `saveAndContinue` did NOT update DB if existing??
-        // Checks: "if (isEditing && project != null) { savedProject = project!; } else { create... }"
-        // This implies "Save And Continue" on an existing project just launches Camera without saving changes?
-        // I should probably save changes.
-
-        // Actually, let's just create logic.
-        // If `isEditing`, update DB.
-        // If !`isEditing`, create new.
-
-        // But `project` is final. Hive objects are immutable usually or we replace them.
-        // Let's assume we update the DB.
-        // However, `projectListNotifier` doesn't have an `updateProject` method exposed in my context yet?
-        // Let's look at `ProjectNotifier`.
-
-        // Assuming we can just launch camera with updated config for now or create new if not exists.
+        final repository = ref.read(projectRepositoryProvider);
+        await repository.initialize();
+        await repository.saveProject(updatedProject);
         savedProject = updatedProject;
-
-        // TODO: Persist updates to existing project if needed.
-        // For now, let's keep it creating new if it's new.
       } else {
         final newProject = Project(
           id: _uuid.v4(),
@@ -148,6 +210,10 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
           storagePath: 'ChronoSnap/$name',
           createdTime: DateTime.now(),
           status: ProjectStatus.idle,
+          enableSchedule: _enableSchedule,
+          startHour: _enableSchedule ? _startHour : null,
+          endHour: _enableSchedule ? _endHour : null,
+          selectedDays: _enableSchedule ? List<int>.from(_selectedDays) : null,
         );
 
         await ref
@@ -158,9 +224,12 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
               totalShots: totalShots,
               cameraConfig: _cameraConfig,
               storagePath: 'ChronoSnap/$name',
+              enableSchedule: _enableSchedule,
+              startHour: _startHour,
+              endHour: _endHour,
+              selectedDays: List<int>.from(_selectedDays),
             );
 
-        // Fetch the saved project to ensure we have the hive object
         final repository = ref.read(projectRepositoryProvider);
         await repository.initialize();
         savedProject = (await repository.getProject(newProject.id))!;
@@ -193,6 +262,14 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
       appBar: AppBar(
         title: Text(isEditing ? 'Settings' : l10n.createProject),
         centerTitle: true,
+        actions: [
+          if (isEditing)
+            IconButton(
+              icon: const Icon(Icons.download_rounded),
+              onPressed: _exportProject,
+              tooltip: 'Export Photos',
+            ),
+        ],
       ),
       body: Center(
         child: Container(
@@ -252,6 +329,8 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
                 ),
                 const SizedBox(height: 16),
                 _buildCameraToggles(),
+                const SizedBox(height: 40),
+                _buildScheduleSection(),
                 const SizedBox(height: 40),
                 SizedBox(
                   height: 50,
@@ -381,6 +460,290 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
     );
   }
 
+  Widget _buildScheduleSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(title: 'Schedule', icon: Icons.schedule),
+        const SizedBox(height: 16),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            children: [
+              _buildSwitchTile(
+                title: 'Enable Schedule',
+                subtitle: 'Only shoot during specified hours',
+                value: _enableSchedule,
+                onChanged: (v) => setState(() => _enableSchedule = v),
+              ),
+              if (_enableSchedule) ...[
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                _buildTimeRangeSelector(),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                _buildDaySelector(),
+                const SizedBox(height: 16),
+              ],
+            ],
+          ),
+        ),
+        if (_enableSchedule && !_isScheduleValid)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'End hour must be after start hour',
+              style: TextStyle(color: Colors.red[600], fontSize: 12),
+            ),
+          ),
+      ],
+    );
+  }
+
+  bool get _isScheduleValid {
+    if (!_enableSchedule) return true;
+    return _startHour < _endHour;
+  }
+
+  Widget _buildTimeRangeSelector() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Shooting Hours',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildHourPicker(
+                  value: _startHour,
+                  onChanged: (v) => setState(() => _startHour = v),
+                  label: 'Start',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildHourPicker(
+                  value: _endHour,
+                  onChanged: (v) => setState(() => _endHour = v),
+                  label: 'End',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHourPicker({
+    required int value,
+    required ValueChanged<int> onChanged,
+    required String label,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[500],
+          ),
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 48,
+          child: InkWell(
+            onTap: () => _showHourPicker(context, value, onChanged),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _formatHour(value),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showHourPicker(
+    BuildContext context,
+    int currentValue,
+    ValueChanged<int> onChanged,
+  ) async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: 300,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    const Text(
+                      'Select Hour',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Done'),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    childAspectRatio: 1.5,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: 24,
+                  itemBuilder: (context, index) {
+                    final hour = index;
+                    final isSelected = hour == currentValue;
+                    return InkWell(
+                      onTap: () {
+                        onChanged(hour);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF2563EB)
+                              : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          _formatHour(hour),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: isSelected ? Colors.white : const Color(0xFF475569),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatHour(int hour) {
+    return '${hour.toString().padLeft(2, '0')}:00';
+  }
+
+  Widget _buildDaySelector() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Active Days',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _kWeekdays.map((day) {
+                final isSelected = _selectedDays.contains(day['id'] as int);
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    selected: isSelected,
+                    label: Text(day['label'] as String),
+                    labelStyle: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: isSelected ? Colors.white : const Color(0xFF475569),
+                    ),
+                    checkmarkColor: Colors.white,
+                    selectedColor: const Color(0xFF2563EB),
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    side: BorderSide.none,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedDays.add(day['id'] as int);
+                        } else {
+                          _selectedDays.remove(day['id'] as int);
+                        }
+                        // 确保至少选中一天
+                        if (_selectedDays.isEmpty) {
+                          _selectedDays.add(1);
+                        }
+                      });
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSwitchTile({
     required String title,
     required String subtitle,
@@ -429,6 +792,101 @@ class _SectionHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 导出进度对话框
+class _ExportProgressDialog extends StatefulWidget {
+  const _ExportProgressDialog();
+
+  @override
+  State<_ExportProgressDialog> createState() => _ExportProgressDialogState();
+}
+
+class _ExportProgressDialogState extends State<_ExportProgressDialog> {
+  int _current = 0;
+  int _total = 100;
+  String _status = '正在打包照片...';
+
+  @override
+  void initState() {
+    super.initState();
+    _startExport();
+  }
+
+  Future<void> _startExport() async {
+    // 模拟初始延迟
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
+      setState(() => _status = '正在压缩文件...');
+    }
+  }
+
+  void updateProgress(int current, int total) {
+    if (mounted) {
+      setState(() {
+        _current = current;
+        _total = total;
+        _status = '正在压缩 (${((current / total) * 100).round()}%)...';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = _total > 0 ? _current / _total : 0.0;
+
+    return AlertDialog(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 60,
+            height: 60,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CircularProgressIndicator(
+                  value: progress as double?,
+                  strokeWidth: 4,
+                  backgroundColor: const Color(0xFFE2E8F0),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    Color(0xFF2563EB),
+                  ),
+                ),
+                Center(
+                  child: Text(
+                    '${(progress * 100).round()}%',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            _status,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$_current / $_total 张照片',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

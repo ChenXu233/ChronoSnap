@@ -5,6 +5,7 @@ import '../../core/i18n/app_localizations.dart';
 import '../../core/model/project.dart';
 import 'project_notifier.dart';
 import 'project_settings_screen.dart';
+import 'shot_log_screen.dart';
 
 final projectSearchProvider = StateProvider<String>((ref) => '');
 
@@ -338,6 +339,30 @@ class _ProjectCard extends ConsumerWidget {
                   ),
                 ),
               ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ShotLogScreen(
+                            projectId: project.id,
+                            projectName: project.name,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.history, size: 18),
+                    label: const Text('Logs'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

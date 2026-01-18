@@ -28,13 +28,17 @@ class ProjectAdapter extends TypeAdapter<Project> {
       status: fields[8] as ProjectStatus,
       completedShots: fields[9] as int,
       lastShotTime: fields[10] as DateTime?,
+      enableSchedule: fields[11] as bool,
+      startHour: fields[12] as int?,
+      endHour: fields[13] as int?,
+      selectedDays: (fields[14] as List?)?.cast<int>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, Project obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(15)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -56,7 +60,15 @@ class ProjectAdapter extends TypeAdapter<Project> {
       ..writeByte(9)
       ..write(obj.completedShots)
       ..writeByte(10)
-      ..write(obj.lastShotTime);
+      ..write(obj.lastShotTime)
+      ..writeByte(11)
+      ..write(obj.enableSchedule)
+      ..writeByte(12)
+      ..write(obj.startHour)
+      ..writeByte(13)
+      ..write(obj.endHour)
+      ..writeByte(14)
+      ..write(obj.selectedDays);
   }
 
   @override

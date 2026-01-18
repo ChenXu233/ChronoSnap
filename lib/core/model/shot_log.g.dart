@@ -19,32 +19,38 @@ class ShotLogAdapter extends TypeAdapter<ShotLog> {
     return ShotLog(
       id: fields[0] as String,
       projectId: fields[1] as String,
-      filePath: fields[2] as String,
+      shotNumber: fields[2] as int,
       timestamp: fields[3] as DateTime,
-      batteryLevel: fields[4] as int,
-      isSuccess: fields[5] as bool,
+      success: fields[4] as bool,
+      photoPath: fields[5] as String?,
       errorMessage: fields[6] as String?,
+      batteryLevel: fields[7] as int?,
+      durationMinutes: fields[8] as double?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ShotLog obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
       ..write(obj.projectId)
       ..writeByte(2)
-      ..write(obj.filePath)
+      ..write(obj.shotNumber)
       ..writeByte(3)
       ..write(obj.timestamp)
       ..writeByte(4)
-      ..write(obj.batteryLevel)
+      ..write(obj.success)
       ..writeByte(5)
-      ..write(obj.isSuccess)
+      ..write(obj.photoPath)
       ..writeByte(6)
-      ..write(obj.errorMessage);
+      ..write(obj.errorMessage)
+      ..writeByte(7)
+      ..write(obj.batteryLevel)
+      ..writeByte(8)
+      ..write(obj.durationMinutes);
   }
 
   @override
