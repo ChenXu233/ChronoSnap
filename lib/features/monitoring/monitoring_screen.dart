@@ -3,10 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camera/camera.dart';
 import '../../core/i18n/app_localizations.dart';
 import '../../core/model/project.dart';
-import '../../core/service/camera_service.dart';
 import '../../core/service/shooting_controller.dart';
-import '../../core/service/foreground_service.dart';
-import '../../core/repository/project_repository.dart';
 import '../project/project_notifier.dart';
 
 class MonitoringScreen extends ConsumerStatefulWidget {

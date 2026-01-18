@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/i18n/app_localizations.dart';
 import '../../core/model/camera_config.dart';
 import '../../core/model/project.dart';
-import '../../core/repository/project_repository.dart';
 import 'project_notifier.dart';
 import '../camera/camera_preview_screen.dart';
 import 'package:uuid/uuid.dart';

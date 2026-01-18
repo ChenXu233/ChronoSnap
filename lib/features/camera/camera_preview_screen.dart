@@ -567,7 +567,7 @@ class _ModernButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           backgroundColor: isPrimary
               ? theme.colorScheme.primary
-              : theme.colorScheme.surfaceVariant,
+              : theme.colorScheme.surfaceContainerHighest,
           foregroundColor: isPrimary
               ? theme.colorScheme.onPrimary
               : theme.colorScheme.onSurfaceVariant,
