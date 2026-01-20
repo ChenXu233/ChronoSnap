@@ -119,10 +119,11 @@ class ShootingController {
       final shotLog = ShotLog(
         id: _uuid.v4(),
         projectId: project.id,
-        filePath: filePath,
+        shotNumber: _shotIndex,
+        photoPath: filePath,
         timestamp: DateTime.now(),
         batteryLevel: _currentBattery,
-        isSuccess: true,
+        success: true,
       );
 
       await repository.saveShotLog(shotLog);
@@ -150,10 +151,11 @@ class ShootingController {
       final shotLog = ShotLog(
         id: _uuid.v4(),
         projectId: project.id,
-        filePath: '',
+        shotNumber: _shotIndex,
+        photoPath: null,
         timestamp: DateTime.now(),
         batteryLevel: _currentBattery,
-        isSuccess: false,
+        success: false,
         errorMessage: e.toString(),
       );
 

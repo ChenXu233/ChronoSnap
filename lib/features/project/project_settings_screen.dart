@@ -4,7 +4,6 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/i18n/app_localizations.dart';
 import '../../core/model/camera_config.dart';
 import '../../core/model/project.dart';
-import '../../core/service/export_service.dart';
 import 'project_notifier.dart';
 import '../camera/camera_preview_screen.dart';
 import 'package:uuid/uuid.dart';
@@ -61,7 +60,7 @@ class _ProjectSettingsScreenState extends ConsumerState<ProjectSettingsScreen> {
 
     // Load schedule settings from project
     if (widget.project != null) {
-      _enableSchedule = widget.project!.enableSchedule;
+      _enableSchedule = widget.project!.enableSchedule ?? false;
       _startHour = widget.project!.startHour ?? 8;
       _endHour = widget.project!.endHour ?? 18;
       _selectedDays = widget.project!.selectedDays ?? [1, 2, 3, 4, 5, 6, 7];

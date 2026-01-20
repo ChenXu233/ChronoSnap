@@ -93,7 +93,7 @@ class ServiceManager {
 
   /// Calculate delay until next valid shooting window
   static Duration? getNextShootingDelay(Project project) {
-    if (!project.enableSchedule) {
+    if (project.enableSchedule != true) {
       return const Duration(seconds: 0);
     }
 

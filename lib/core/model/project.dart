@@ -51,7 +51,7 @@ class Project {
 
   /// 高级时间表配置
   @HiveField(11)
-  final bool enableSchedule;
+  final bool? enableSchedule;
 
   @HiveField(12)
   final int? startHour;
@@ -82,7 +82,7 @@ class Project {
 
   /// 检查当前时间是否在拍摄时间范围内
   bool isInScheduleWindow() {
-    if (!enableSchedule) return true;
+    if (enableSchedule != true) return true;
     if (startHour == null || endHour == null) return true;
 
     final now = DateTime.now();
@@ -114,7 +114,7 @@ class Project {
 
   /// 获取下一次可拍摄时间
   DateTime? getNextAvailableTime() {
-    if (!enableSchedule) return DateTime.now();
+    if (enableSchedule != true) return DateTime.now();
 
     final now = DateTime.now();
     final start = startHour ?? 0;

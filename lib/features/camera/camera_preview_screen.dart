@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/model/project.dart';
 import '../../core/i18n/app_localizations.dart';
-import '../../core/service/camera_service.dart';
 import '../project/project_notifier.dart';
 import '../monitoring/monitoring_screen.dart';
 import 'package:camera/camera.dart';

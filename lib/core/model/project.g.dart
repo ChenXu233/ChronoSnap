@@ -28,7 +28,7 @@ class ProjectAdapter extends TypeAdapter<Project> {
       status: fields[8] as ProjectStatus,
       completedShots: fields[9] as int,
       lastShotTime: fields[10] as DateTime?,
-      enableSchedule: fields[11] as bool,
+      enableSchedule: fields[11] as bool?,
       startHour: fields[12] as int?,
       endHour: fields[13] as int?,
       selectedDays: (fields[14] as List?)?.cast<int>(),
